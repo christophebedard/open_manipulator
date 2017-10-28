@@ -32,8 +32,10 @@
 namespace open_manipulator_dynamixel_controller
 {
 #define MOTOR                (0)
-#define MAX_DXL_NUM          (5)
 #define ITERATION_FREQUENCY  (25)
+
+static const float PROTOCOL_VERSION_ONE = 1.0;
+static const float PROTOCOL_VERSION_TWO = 2.0;
 
 typedef struct
 {
@@ -75,6 +77,9 @@ class DynamixelController
 
   WriteValue *writeValue_;
   ReadValue  *readValue_;
+
+  int max_dxl_num_;
+  float protocol_version_;
 
  public:
   DynamixelController();

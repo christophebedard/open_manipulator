@@ -56,13 +56,16 @@ bool DynamixelController::loadDynamixel()
 {
   bool ret = false;
 
-  for (int id = 1; id <= MAX_DXL_NUM; id++)
+  max_dxl_num_ = nh_.param<int>("max_dxl_num", 5);
+  protocol_version_ = nh_.param<float>("protocol_version", 2.0);
+
+  for (int id = 1; id <= max_dxl_num_; id++)
   {
     dynamixel_driver::DynamixelInfo *dynamixel= new dynamixel_driver::DynamixelInfo;
 
     dynamixel->lode_info.device_name      = nh_.param<std::string>("device_name", "/dev/ttyUSB0");
     dynamixel->lode_info.baud_rate        = nh_.param<int>("baud_rate", 1000000);
-    dynamixel->lode_info.protocol_version = nh_.param<float>("protocol_version", 2.0);
+    dynamixel->lode_info.protocol_version = protocol_version_;
 
     dynamixel->model_id                   = id;
 
@@ -81,7 +84,7 @@ bool DynamixelController::loadDynamixel()
 bool DynamixelController::setTorque(bool onoff)
 {
   writeValue_->torque.clear();
-  for (int id = 1; id <= MAX_DXL_NUM; id++)
+  for (int id = 1; id <= max_dxl_num_; id++)
   {
     writeValue_->torque.push_back(onoff);
   }
@@ -99,7 +102,7 @@ bool DynamixelController::setPosition(uint32_t* pos)
 {
   writeValue_->pos.clear();
 
-  for (int id = 1; id <= MAX_DXL_NUM; id++)
+  for (int id = 1; id <= max_dxl_num_; id++)
   {
     writeValue_->pos.push_back(pos[id-1]);
   }
@@ -127,27 +130,38 @@ bool DynamixelController::initDynamixelStateSubscriber()
 bool DynamixelController::readDynamixelState(void)
 {
   readValue_->pos.clear();
-  if (!multi_driver_->syncReadPosition(readValue_->pos))
-    ROS_ERROR("Sync Read Failed!");
+
+  if (protocol_version_ == PROTOCOL_VERSION_ONE ) {
+    if (!multi_driver_->readMultiRegister("present_position"))
+      ROS_ERROR("readMultiRegister Failed!");
+  } else {
+    if (!multi_driver_->syncReadPosition(readValue_->pos))
+      ROS_ERROR("Sync Read Failed!");
+  }
 
   sensor_msgs::JointState dynamixel_position;
 
-  for (int id = 1; id <= MAX_DXL_NUM; id++)
+  for (int id = 1; id <= max_dxl_num_; id++)
   {
     std::stringstream id_num;
     id_num << "id_" << id;
 
     dynamixel_position.name.push_back(id_num.str());
-    dynamixel_position.position.push_back(convertValue2Radian((int32_t)readValue_->pos.at(id-1)));
+    
+    if (protocol_version_ == PROTOCOL_VERSION_ONE ) {
+      dynamixel_position.position.push_back(convertValue2Radian((int32_t)multi_driver_->read_value_["present_position"]->at(id-1)));
+    } else {
+      dynamixel_position.position.push_back(convertValue2Radian((int32_t)readValue_->pos.at(id-1)));
+    }
   }
   present_dynamixel_position_pub_.publish(dynamixel_position);
 }
 
 void DynamixelController::goalPositionMsgCallback(const sensor_msgs::JointState::ConstPtr &msg)
 {
-  uint32_t goal_position[MAX_DXL_NUM] = {0, };
+  uint32_t goal_position[max_dxl_num_] = {0, };
 
-  for (int id = 1; id <= MAX_DXL_NUM; id++)
+  for (int id = 1; id <= max_dxl_num_; id++)
   {
     goal_position[id-1] = convertRadian2Value(msg->position.at(id-1));
 
