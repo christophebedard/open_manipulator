@@ -58,6 +58,7 @@ class DynamixelController
   // Dynamixel Workbench Parameters
   std::string robot_name_;
   float protocol_version_;
+  int max_dxl_num_;
 
   DynamixelWorkbench *joint_controller_;
   DynamixelWorkbench *gripper_controller_;

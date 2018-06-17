@@ -34,6 +34,7 @@ DynamixelController::DynamixelController()
   std::string device_name   = priv_node_handle_.param<std::string>("device_name", "/dev/ttyUSB0");
   uint32_t dxl_baud_rate    = priv_node_handle_.param<int>("baud_rate", 1000000);
   protocol_version_         = priv_node_handle_.param<float>("protocol_version", 2.0);
+  max_dxl_num_              = priv_node_handle_.param<int>("max_dxl_num", 5);
 
   joint_mode_   = priv_node_handle_.param<std::string>("joint_controller", "position_mode");
 
@@ -62,7 +63,7 @@ DynamixelController::DynamixelController()
 
 DynamixelController::~DynamixelController()
 {
-  for (uint8_t num = 0; num < JOINT_NUM; num++)
+  for (uint8_t num = 0; num < max_dxl_num_; num++)
     joint_controller_->itemWrite(joint_id_.at(num), "Torque_Enable", false);
 
   gripper_controller_->itemWrite(gripper_id_.at(0), "Torque_Enable", false);
@@ -84,7 +85,7 @@ void DynamixelController::initSubscriber()
 void DynamixelController::getDynamixelInst()
 {
   uint16_t get_model_number;
-  for (uint8_t index = 0; index < JOINT_NUM; index++)
+  for (uint8_t index = 0; index < max_dxl_num_; index++)
   {
 
     if (joint_controller_->ping(joint_id_.at(index), &get_model_number) != true)
@@ -112,17 +113,17 @@ void DynamixelController::setOperatingMode()
 {
   if (joint_mode_ == "position_mode")
   {
-    for (uint8_t num = 0; num < JOINT_NUM; num++)
+    for (uint8_t num = 0; num < max_dxl_num_; num++)
       joint_controller_->jointMode(joint_id_.at(num));
   }
   else if (joint_mode_ == "current_mode")
   {
-    for (uint8_t num = 0; num < JOINT_NUM; num++)
+    for (uint8_t num = 0; num < max_dxl_num_; num++)
       joint_controller_->currentMode(joint_id_.at(num));
   }
   else
   {
-    for (uint8_t num = 0; num < JOINT_NUM; num++)
+    for (uint8_t num = 0; num < max_dxl_num_; num++)
       joint_controller_->jointMode(joint_id_.at(num));
   }
 
@@ -153,19 +154,19 @@ void DynamixelController::readPosition(double *value)
     get_joint_present_position = joint_controller_->syncRead("Present_Position");
   else if (protocol_version_ == 1.0)
   {
-    for (int index = 0; index < JOINT_NUM; index++)
+    for (int index = 0; index < max_dxl_num_; index++)
       get_joint_present_position[index] = joint_controller_->itemRead(joint_id_.at(index), "Present_Position");
   }
 
   int32_t get_gripper_present_position = gripper_controller_->itemRead(gripper_id_.at(0), "Present_Position");
   int32_t present_position[DXL_NUM] = {0, };
 
-  for (int index = 0; index < JOINT_NUM; index++)
+  for (int index = 0; index < max_dxl_num_; index++)
     present_position[index] = get_joint_present_position[index];
 
   present_position[DXL_NUM-1] = get_gripper_present_position;
 
-  for (int index = 0; index < JOINT_NUM; index++)
+  for (int index = 0; index < max_dxl_num_; index++)
   {
     value[index] = joint_controller_->convertValue2Radian(joint_id_.at(index), present_position[index]);
   }
@@ -181,19 +182,19 @@ void DynamixelController::readVelocity(double *value)
     get_joint_present_velocity = joint_controller_->syncRead("Present_Velocity");
   else if (protocol_version_ == 1.0)
   {
-    for (int index = 0; index < JOINT_NUM; index++)
+    for (int index = 0; index < max_dxl_num_; index++)
       get_joint_present_velocity[index] = joint_controller_->itemRead(joint_id_.at(index), "Present_Velocity");
   }
 
   int32_t get_gripper_present_velocity = gripper_controller_->itemRead(gripper_id_.at(0), "Present_Velocity");
   int32_t present_velocity[DXL_NUM] = {0, };
 
-  for (int index = 0; index < JOINT_NUM; index++)
+  for (int index = 0; index < max_dxl_num_; index++)
     present_velocity[index] = get_joint_present_velocity[index];
 
   present_velocity[DXL_NUM-1] = get_gripper_present_velocity;
 
-  for (int index = 0; index < JOINT_NUM; index++)
+  for (int index = 0; index < max_dxl_num_; index++)
   {
     value[index] = joint_controller_->convertValue2Velocity(joint_id_.at(index), present_velocity[index]);
   }
@@ -205,12 +206,12 @@ void DynamixelController::updateJointStates()
 {
   sensor_msgs::JointState joint_state;
 
-  float joint_states_pos[JOINT_NUM + PALM_NUM] = {0.0, };
-  float joint_states_vel[JOINT_NUM + PALM_NUM] = {0.0, };
-  float joint_states_eff[JOINT_NUM + PALM_NUM] = {0.0, };
+  float joint_states_pos[max_dxl_num_ + PALM_NUM] = {0.0, };
+  float joint_states_vel[max_dxl_num_ + PALM_NUM] = {0.0, };
+  float joint_states_eff[max_dxl_num_ + PALM_NUM] = {0.0, };
 
-  double get_joint_position[JOINT_NUM + GRIPPER_NUM] = {0.0, };
-  double get_joint_velocity[JOINT_NUM + GRIPPER_NUM] = {0.0, };
+  double get_joint_position[max_dxl_num_ + GRIPPER_NUM] = {0.0, };
+  double get_joint_velocity[max_dxl_num_ + GRIPPER_NUM] = {0.0, };
 
   readPosition(get_joint_position);
   readVelocity(get_joint_velocity);
@@ -239,7 +240,7 @@ void DynamixelController::updateJointStates()
   joint_states_vel[4] = get_joint_velocity[4];
   joint_states_vel[5] = joint_states_vel[4];
 
-  for (int index = 0; index < JOINT_NUM + PALM_NUM; index++)
+  for (int index = 0; index < max_dxl_num_ + PALM_NUM; index++)
   {
     joint_state.position.push_back(joint_states_pos[index]);
     joint_state.velocity.push_back(joint_states_vel[index]);
@@ -251,14 +252,14 @@ void DynamixelController::updateJointStates()
 
 void DynamixelController::goalJointPositionCallback(const sensor_msgs::JointState::ConstPtr &msg)
 {
-  double goal_joint_position[JOINT_NUM] = {0.0, 0.0, 0.0, 0.0};
+  double goal_joint_position[max_dxl_num_] = {0.0, 0.0, 0.0, 0.0};
 
-  for (int index = 0; index < JOINT_NUM; index++)
+  for (int index = 0; index < max_dxl_num_; index++)
     goal_joint_position[index] = msg->position.at(index);
 
-  int32_t goal_position[JOINT_NUM] = {0, };
+  int32_t goal_position[max_dxl_num_] = {0, };
 
-  for (int index = 0; index < JOINT_NUM; index++)
+  for (int index = 0; index < max_dxl_num_; index++)
   {
     goal_position[index] = joint_controller_->convertRadian2Value(joint_id_.at(index), goal_joint_position[index]);
   }
